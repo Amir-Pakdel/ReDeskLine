@@ -1,0 +1,56 @@
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart' as msicons;
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/services/win_registry_service.dart';
+import '../../../core/widgets/card_highlight.dart';
+import '../../../extensions.dart';
+import '../../../i18n/generated/strings.g.dart';
+import '../../../utils_gui.dart';
+import 'performance_service.dart';
+import 'sections/background_priority_section.dart';
+import 'sections/memory_storage_section.dart';
+import 'sections/powerplan_section.dart';
+import 'sections/presentation_section.dart';
+
+class const PerformancePage({super.key}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ScaffoldPage.scrollable(
+      padding: kScaffoldPagePadding,
+      children: [
+        const PowerplanSection(),
+        const MemoryStorageSection(),
+
+        if (WinRegistryService.isIntelCpu || kDebugMode) const _IntelTSXCard(),
+
+        const BackgroundManagementSection(),
+        const PresentationSection(),
+      ].withSpacing(5),
+    );
+  }
+}
+
+class const _IntelTSXCard() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool status = ref.watch(intelTSXStatusProvider);
+
+    return CardHighlight(
+      icon: msicons.FluentIcons.transmission_20_regular,
+      label: t.tweaksPerformanceIntelTSX,
+      description: t.tweaksPerformanceIntelTSXDescription,
+      action: CardToggleSwitch(
+        value: status,
+        requiresRestart: true,
+        onChanged: (value) async {
+          value
+              ? await ref.read(performanceServiceProvider).enableIntelTSX()
+              : await ref.read(performanceServiceProvider).disableIntelTSX();
+          ref.invalidate(intelTSXStatusProvider);
+        },
+      ),
+    );
+  }
+}

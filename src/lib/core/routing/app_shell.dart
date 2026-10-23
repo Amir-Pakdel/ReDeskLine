@@ -1,0 +1,398 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart' as msicons;
+import 'package:flutter/gestures.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:win32/win32.dart';
+import 'package:win32_registry/win32_registry.dart';
+// ignore: implementation_imports
+import 'package:window_plus/src/common.dart' show WM_CAPTIONAREA;
+// ignore: implementation_imports
+import 'package:window_plus/src/widgets/win32/utils.dart' show WindowButtonColors;
+// ignore: implementation_imports
+import 'package:window_plus/src/widgets/win32/widgets.dart'
+    show WindowCloseButton, WindowMinimizeButton, WindowRestoreMaximizeButton;
+import 'package:window_plus/window_plus.dart';
+
+import '../../extensions.dart';
+import '../../features/desktop/deskline_bridge.dart';
+import '../../i18n/generated/strings.g.dart';
+import '../motion/winui_navigation_indicator.dart';
+import '../services/win_registry_service.dart';
+import '../widgets/app_icon_image.dart';
+import '../widgets/caption_title_bar.dart';
+import '../widgets/page_header_with_breadcrumbs.dart';
+import 'app_router.dart';
+import 'app_routes.dart';
+import 'navigation_provider.dart';
+
+final class const AppShell({
+  super.key,
+  required final Widget child,
+  required final BuildContext? shellContext,
+}) extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+final class _AppShellState() extends ConsumerState<AppShell> {
+  final GlobalKey<State<StatefulWidget>> _viewKey = GlobalKey(debugLabel: 'Navigation View Key');
+  final GlobalKey<AutoSuggestBoxState<dynamic>> _searchKey = GlobalKey(
+    debugLabel: 'Search Bar Key',
+  );
+  final _overlayFocusNode = FocusNode();
+  final _searchFocusNode = FocusNode();
+  final _searchController = TextEditingController();
+  final _overlayPortalController = OverlayPortalController();
+
+  static const imgXY = 60.0;
+  AutoSuggestBoxItem<dynamic>? selectedPage;
+
+  late final List<AutoSuggestBoxItem<dynamic>> _searchItems = AppRoutes.searchableItems
+      .map((e) {
+        final item = e as PaneItem;
+        return AutoSuggestBoxItem(
+          child: Row(spacing: 8, children: [?e.icon, e.title!]),
+          value: (e.title! as Text).data,
+          label: (e.title! as Text).data!,
+          onSelected: () async {
+            final path = (item.key! as ValueKey).value.toString();
+            await context.push(path);
+            await Future<void>.delayed(const Duration(milliseconds: 17));
+            _searchController.clear();
+            _overlayPortalController.hide();
+          },
+        );
+      })
+      .toList(growable: false);
+
+  static final String? _username = WinRegistryService.readString(
+    CURRENT_USER,
+    r'Volatile Environment',
+    'USERNAME',
+  );
+
+  static final File _userImageFile = (() {
+    final String path =
+        r'SOFTWARE\Microsoft\Windows\CurrentVersion\AccountPicture\Users\' +
+        WinRegistryService.currentUserSid;
+
+    final String? imagePath = WinRegistryService.readString(LOCAL_MACHINE, path, 'Image192');
+    if (imagePath != null && File(imagePath).existsSync()) {
+      return File(imagePath);
+    }
+
+    return File(r'C:\ProgramData\Microsoft\User Account Pictures\user-192.png');
+  })();
+
+  void _updateNavigationIndex() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final location = GoRouterState.of(context).uri.toString();
+      final RouteMeta? route = RouteMeta.fromPath(location, allowPrefix: true);
+      final int? index = AppRoutes.getPaneIndexFromRoute(route);
+      if (index != null) {
+        ref.read(navigationIndexProvider.notifier).index = index;
+      }
+    });
+  }
+
+  @override
+  void initState() {
+    _updateNavigationIndex();
+    WindowPlus.instance.setWindowCloseHandler(() async {
+      await WindowPlus.instance.hide();
+      return false;
+    });
+    unawaited(DesklineBridge.instance.start());
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    unawaited(DesklineBridge.instance.stop());
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _overlayFocusNode.dispose();
+    super.dispose();
+  }
+
+  VoidCallback? backButtonAvailable(BuildContext context) {
+    final GoRouter router = ref.read(appRouterProvider);
+    final List<RouteMatchBase> matches = router.routerDelegate.currentConfiguration.matches;
+    final firstMatch = matches.first as ShellRouteMatch;
+
+    final VoidCallback? onPressed = firstMatch.matches.length > 1
+        ? () {
+            context.pop();
+            _updateNavigationIndex();
+          }
+        : null;
+    return onPressed;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    assert(debugCheckHasFluentTheme(context));
+    final int imgCacheSize = (imgXY * MediaQuery.devicePixelRatioOf(context)).toInt();
+
+    final AutoSuggestBox<dynamic> autoSuggestBox = AutoSuggestBox(
+      // Needed to override decoration when autoSuggestBox is an overlay
+      decoration: .resolveWith((states) {
+        final bool isOverlayVisible = _searchKey.currentState?.isOverlayVisible ?? false;
+
+        final Color color = states.isFocused
+            ? context.theme.resources.solidBackgroundFillColorSecondary
+            : context.theme.resources.solidBackgroundFillColorQuarternary;
+
+        final BorderRadius borderRadius = isOverlayVisible
+            ? const .vertical(top: .circular(15))
+            : const .all(.circular(30));
+
+        return .new(color: color, borderRadius: borderRadius);
+      }),
+      leadingIcon: const Padding(
+        padding: EdgeInsetsDirectional.only(start: 11.5),
+        child: Icon(msicons.FluentIcons.search_20_regular),
+      ),
+      key: _searchKey,
+      focusNode: _searchFocusNode,
+      controller: _searchController,
+      placeholder: t.suggestionBoxPlaceholder,
+      items: _searchItems,
+      trailingIcon: const Padding(
+        padding: EdgeInsetsDirectional.only(start: 8),
+        child: SizedBox.shrink(),
+      ),
+    );
+
+    return Listener(
+      onPointerDown: (PointerDownEvent event) async {
+        if (event.buttons & kBackMouseButton != 0 && context.canPop()) {
+          await Future<void>.delayed(
+            Duration(milliseconds: context.theme.fastAnimationDuration.inMilliseconds),
+          );
+          if (context.mounted && context.canPop()) {
+            context.pop();
+            _updateNavigationIndex();
+          }
+        }
+      },
+      child: SafeArea(
+        child: NavigationView(
+          key: _viewKey,
+          contentShape: const RoundedRectangleBorder(
+            side: .new(width: 0, color: Colors.transparent),
+            borderRadius: .only(topLeft: .circular(8.0)),
+          ),
+          titleBar: CaptionTitleBar(
+            backButton: () {
+              final VoidCallback? onPressed = backButtonAvailable(context);
+
+              if (onPressed == null) return const SizedBox.shrink();
+
+              return Semantics(
+                label: t.back,
+                button: true,
+                child: PaneBackButton(
+                  onPressed: onPressed,
+                  backIcon: const Center(child: Icon(FluentIcons.back, size: 12.0)),
+                ),
+              );
+            }(),
+            // To match W11's Settings app title bar style, `leftHeader` must be the title, when width > 800 `title` must be a search [IconButton] that spawns an overlay otherwise it must be null and the search [AutoSuggestBox] must be in `content`
+            leftHeader: Padding(
+              padding: backButtonAvailable(context) == null
+                  ? const EdgeInsetsDirectional.only(start: 14)
+                  : .zero,
+              child: const Row(
+                spacing: 8,
+                mainAxisSize: .min,
+                children: [
+                  AppIconImage(size: 24.0, fallback: SizedBox.shrink()),
+                  Text('ReDeskLine', style: TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+            title: MediaQuery.widthOf(context) > 800
+                ? null
+                : OverlayPortal(
+                    controller: _overlayPortalController,
+                    overlayChildBuilder: (context) => Stack(
+                      children: [
+                        Positioned.fill(
+                          child: GestureDetector(
+                            behavior: .opaque,
+                            onTap: _overlayPortalController.hide,
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                        Positioned(top: 50, left: 25, right: 25, child: autoSuggestBox),
+                      ],
+                    ),
+                    child: Tooltip(
+                      message: t.search,
+                      child: IconButton(
+                        icon: const Icon(msicons.FluentIcons.search_20_regular),
+                        onPressed: () {
+                          _overlayPortalController.show();
+                          _searchFocusNode.requestFocus();
+                          _overlayFocusNode.requestFocus();
+                        },
+                      ),
+                    ),
+                  ),
+            content: MediaQuery.widthOf(context) > 800
+                ? ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 470),
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.symmetric(vertical: 8),
+                      child: autoSuggestBox,
+                    ),
+                  )
+                : null,
+            captionControls: _CaptionControls(),
+            onDragStarted: () {
+              PostMessage(WindowPlus.instance.hwnd, WM_CAPTIONAREA, const .new(0), const .new(0));
+            },
+          ),
+          pane: NavigationPane(
+            acrylicDisabled: true,
+            indicator: const WinUINavigationIndicator(indicatorSize: 3.5, inset: 12.5),
+            size: const .new(openWidth: 300, headerHeight: 90.5),
+            selected: ref.watch(navigationIndexProvider),
+            onItemPressed: (index) {
+              if (index == ref.read(navigationIndexProvider)) return;
+
+              final RouteMeta route = AppRoutes.navigationRoutes[index];
+              ref.read(navigationIndexProvider.notifier).index = index;
+              context.push(route.path);
+            },
+            displayMode: MediaQuery.widthOf(context) >= 800 ? .expanded : .minimal,
+            header: RepaintBoundary(
+              child: Center(
+                heightFactor: 5,
+                child: ListTile(
+                  leading: ClipRRect(
+                    borderRadius: const .all(.circular(30.0)),
+                    child: Image.file(
+                      width: imgXY,
+                      height: imgXY,
+                      cacheWidth: imgCacheSize,
+                      cacheHeight: imgCacheSize,
+                      _userImageFile,
+                    ),
+                  ),
+                  margin: .zero,
+                  contentPadding: .zero,
+                  title: Text(
+                    _username ?? 'User',
+                    style: const .new(fontWeight: .w500, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    WinRegistryService.systemLabel,
+                    style: const .new(fontSize: 11, fontWeight: .normal),
+                  ),
+                ),
+              ),
+            ),
+            items: AppRoutes.mainPaneItems,
+            footerItems: [
+              ...AppRoutes.footerPaneItems,
+              PaneItemSeparator(color: Colors.transparent),
+            ],
+          ),
+          paneBodyBuilder: (item, child) {
+            final String? name = item?.key is ValueKey
+                ? (item!.key! as ValueKey).value.toString()
+                : null;
+            return FocusTraversalGroup(
+              key: ValueKey('body$name'),
+              child: Builder(
+                builder: (context) => Padding(
+                  padding: const EdgeInsetsDirectional.only(top: 9),
+                  child: Column(
+                    children: [
+                      const PageHeaderBreadcrumbs(),
+                      // The ShellRoute nests a Navigator here. Its route scope
+                      // (`Semantics(scopesRoute: true, explicitChildNodes: true)`)
+                      // blocks the previously-painted navigation pane from the
+                      // semantics tree, which left the pane items unreadable by
+                      // screen readers. A semantic boundary contains the route
+                      // scope so the pane remains exposed to NVDA/Narrator.
+                      Expanded(child: Semantics(container: true, child: widget.child)),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ignore: prefer_const_constructors_in_immutables -- const would freeze live window-state reads on rebuilds
+final class _CaptionControls() extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Builder(
+      builder: (context) {
+        if (!WindowPlus.instance.enableCustomFrame) return const SizedBox.shrink();
+
+        return FutureBuilder<bool>(
+          future: WindowPlus.instance.fullscreen,
+          builder: (context, snapshot) {
+            if (snapshot.data case true) {
+              return SizedBox(width: .infinity, height: WindowPlus.instance.captionHeight);
+            }
+            final double buttonWidth = WindowPlus.instance.captionButtonSize.width;
+
+            // FluentTheme brightness drives the system caption colors per WASDK guidelines.
+            final isDark = context.theme.brightness == .dark;
+            final foreground = isDark ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
+            final regular = WindowButtonColors(
+              normal: const Color(0x00000000),
+              mouseOver: foreground.withValues(alpha: 0.04),
+              mouseDown: foreground.withValues(alpha: 0.08),
+              iconNormal: foreground,
+              iconMouseOver: foreground,
+              iconMouseDown: foreground,
+            );
+            final close = WindowButtonColors(
+              normal: const Color(0x00000000),
+              mouseOver: const Color(0xFFC42B1C),
+              mouseDown: const Color(0xFFC83F31),
+              iconNormal: foreground,
+              iconMouseOver: const Color(0xFFFFFFFF),
+              iconMouseDown: const Color(0xFFFFFFFF),
+            );
+
+            return Row(
+              mainAxisAlignment: .end,
+              crossAxisAlignment: .stretch,
+              children: [
+                SizedBox(
+                  width: buttonWidth,
+                  child: WindowMinimizeButton(colors: regular),
+                ),
+                SizedBox(
+                  width: buttonWidth,
+                  child: WindowRestoreMaximizeButton(colors: regular),
+                ),
+                SizedBox(
+                  width: buttonWidth,
+                  child: WindowCloseButton(colors: close),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}

@@ -1,0 +1,52 @@
+import 'dart:io';
+
+import 'package:args/command_runner.dart';
+import 'package:riverpod/riverpod.dart';
+
+import 'core/services/win_registry_command.dart';
+import 'core/services/win_registry_service.dart';
+import 'features/appx/appx.dart';
+import 'features/ms_store/domain/services/store_service.dart';
+import 'features/ms_store/presentation/commands/ms_store_command.dart';
+import 'features/tweaks/tweaks_command.dart';
+import 'features/winsxs/winsxs.dart';
+import 'utils.dart';
+
+Future<void> main(List<String> args) async {
+  if (!WinRegistryService.isSupported && !WinRegistryService.isAmePlaybook) {
+    logger.i('Revision Tool needs Windows 10, Windows 11, or Windows Server 2016 or newer.');
+    exit(55);
+  }
+
+  if (args.isEmpty) {
+    final guiPath = "${mainPath.substring(0, mainPath.lastIndexOf(r"\"))}\\revitoolw.exe";
+    if (File(guiPath).existsSync()) {
+      await Process.start('revitoolw', []);
+      exit(0);
+    }
+    exit(1);
+  }
+  const tag = 'cli_main:';
+
+  final container = ProviderContainer();
+
+  logger.i('$tag Revision Tool CLI is starting');
+
+  final runner =
+      CommandRunner<void>(
+          'revitool',
+          "Revision Tool CLI v${const String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0')}",
+        )
+        ..addCommand(AppxCommand(container: container))
+        ..addCommand(MSStoreCommand(service: container.read(storeServiceProvider)))
+        ..addCommand(WinRegistryServiceCliCommand(const WinRegistryCliService()))
+        ..addCommand(TweaksCommand(container: container))
+        ..addCommand(WindowsPackageCommand(container: container));
+  try {
+    await runner.run(args);
+  } on UsageException catch (e) {
+    logger.e('cli: ${e.message}');
+    exit(appxExitUsage);
+  }
+  exit(0);
+}

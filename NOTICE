@@ -1,0 +1,17 @@
+ReDeskLine
+Copyright (C) 2026 Amir Pakdel
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+The name "ReDeskLine" and the copyright notice of Amir Pakdel must be
+preserved in all copies and substantial portions of this software.
+
+ReDeskLine includes work derived from Revision Tool, which is licensed
+under the GNU General Public License v3.0. Original Revision Tool
+copyright notices are retained as required by that license.
+
+See LICENSE for the full GNU GPL v3 text.
+See deskline/NOTICE for the included Deskline engine.

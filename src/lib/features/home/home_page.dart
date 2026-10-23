@@ -1,0 +1,97 @@
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart' as msicons;
+import 'package:go_router/go_router.dart';
+import '../../core/routing/app_routes.dart';
+import '../../core/widgets/card_highlight.dart';
+import '../../extensions.dart';
+import '../../i18n/generated/strings.g.dart';
+import '../../utils_gui.dart';
+
+class const HomePage({super.key}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final homeCardButtons = [
+      CardHighlight(
+        icon: msicons.FluentIcons.desktop_20_regular,
+        label: t.pageDesktop,
+        description: t.pageDesktopDescription,
+        onPressed: () => context.push(RouteMeta.desktop.path),
+        action: const ChevronRightAction(),
+      ),
+      CardHighlight(
+        icon: FluentIcons.git_graph,
+        label: t.homeCardGithub,
+        description: t.homeCardGithubDescription,
+        onPressed: () async => launchURL('https://github.com/Amir-Pakdel'),
+        action: const ChevronRightAction(),
+      ),
+    ];
+    if (context.mqSize.width >= 800 && context.mqSize.height >= 400) {
+      return ScaffoldPage(
+        padding: kScaffoldPagePadding,
+        content: const _HomePageContent(),
+        footer: Padding(
+          padding: const EdgeInsets.only(top: 5.0),
+          child: Row(spacing: 5, children: homeCardButtons.map((e) => Expanded(child: e)).toList()),
+        ),
+      );
+    } else {
+      return ScaffoldPage.scrollable(
+        padding: kScaffoldPagePadding,
+        children: [
+          const _HomePageContent(),
+          const SizedBox(height: 5),
+          Wrap(runSpacing: 5, children: homeCardButtons.map((e) => e).toList()),
+        ],
+      );
+    }
+  }
+}
+
+class const _HomePageContent() extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 250,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        gradient: context.theme.brightness == .dark
+            ? const LinearGradient(
+                colors: [
+                  Color.fromRGBO(0, 0, 0, 0.85),
+                  Color.fromRGBO(0, 0, 0, 0.43),
+                  Color.fromRGBO(0, 0, 0, 0),
+                ],
+                stops: [0.0, 0.4, 1.0],
+              )
+            : const LinearGradient(
+                colors: [
+                  Color.fromRGBO(16, 16, 16, 0.8),
+                  Color.fromRGBO(155, 155, 155, 0.5),
+                  Color.fromRGBO(255, 255, 255, 0),
+                ],
+                stops: [0.0, 0.6, 1.0],
+              ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 50),
+        child: Column(
+          mainAxisAlignment: .center,
+          crossAxisAlignment: .start,
+          children: [
+            Text(t.homeWelcome, style: const TextStyle(fontSize: 16, color: Color(0xB7FFFFFF))),
+            const Text('ReDeskLine', style: TextStyle(fontSize: 28, color: Color(0xFFffffff))),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Text(
+                t.homeDescription,
+                style: const TextStyle(fontSize: 16, color: Color(0xB7FFFFFF)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -1,0 +1,36 @@
+# Installers and local build output
+ReDeskLine-Setup.exe
+RevisionTool-Setup.exe
+src/build/
+**/build/
+**/.dart_tool/
+**/.pub-cache/
+**/.pub/
+**/coverage/
+**/target/
+
+# Python
+**/.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Local debug captures
+aim.png
+icons-zoom.png
+menu-window.png
+menu-window2.png
+ps-tray.png
+tray-after-rebuild.png
+where.png
+wide-tray.png
+tray-test.ps1
+tray-test.txt
+
+# Secrets and editor junk
+.env
+.env.*
+*.pem
+.DS_Store
+Thumbs.db
+*.log

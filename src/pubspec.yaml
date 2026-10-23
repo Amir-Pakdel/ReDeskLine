@@ -1,0 +1,193 @@
+name: revitool
+description: A tool to personalize ReviOS to your needs
+publish_to: "none"
+
+# The version number defaults to 1.0.0 for easier development and is incremented by the build flags based on the tag
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Localization
+  slang: ^4.19.1
+  slang_flutter: ^4.19.0
+
+  # UI
+  fluent_ui:
+    git:
+      url: https://github.com/bdlukaa/fluent_ui
+      ref: b034c5
+  system_theme: ^3.3.0
+  flutter_acrylic: ^1.1.4
+  fluentui_system_icons: ^1.1.273
+  window_plus:
+    git:
+      # url: https://github.com/melo936/window_plus
+      url: https://github.com/alexmercerind/window_plus
+  adaptive_palette: ^3.1.0
+
+  # State management
+  riverpod: ^3.4.3 # for CLI
+  flutter_riverpod: ^3.4.3
+  riverpod_annotation: ^4.0.7
+
+  # Path
+  path: ^1.9.1
+
+  # Network
+  dio: ^5.11.1
+
+  # Shell
+  process_run: ^1.3.5
+
+  # Interactivity with Windows
+  win32: ^6.4.0
+  win32_registry: ^3.0.3
+  ffi: ^2.2.0
+  revitool_native:
+    path: ./packages/revitool_native
+
+  # Code generation
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.12.0
+
+  # Logging
+  logger: ^2.8.0
+  # Command line
+  args: ^2.7.0
+
+  # Routing
+  go_router: ^18.0.1
+
+  # Other
+  collection: ^1.19.1
+  fast_immutable_collections: ^12.0.0
+  xml: ^7.0.1
+  crypto: ^3.0.7
+  flutter_svg: ^2.3.0
+
+  # Code generation dependencies
+  analyzer: ^14.3.0
+  build: ^4.0.11
+  code_builder: ^4.12.0
+  source_gen: ^4.3.0
+
+  vector_graphics: ^1.2.3
+  tray_manager: ^0.8.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  riverpod_lint: ^3.1.9
+  build_runner: ^2.16.1
+  freezed: ^4.0.1
+  json_serializable: ^6.14.1
+  riverpod_generator: ^4.0.9
+  mocktail: ^1.0.5
+  slang_build_runner: ^4.19.0
+  melos: ^8.9.0
+
+workspace:
+  - packages/revitool_native
+
+melos:
+  useRootAsPackage: true
+  command:
+    version:
+      versionPrivatePackages: true
+    bootstrap:
+      runPubGetInParallel: true
+  scripts:
+    analyze:
+      description: Analyze all packages.
+      exec:
+        command: dart analyze --fatal-infos
+    format:
+      description: Format all packages.
+      exec:
+        command: dart format .
+    test:
+      description: Run tests for all packages with tests.
+      exec:
+        command: flutter test --reporter=expanded --dart-define=SKIP_INTEGRATION=true
+      packageFilters:
+        dirExists: test
+
+    codegen:slang:
+      description: Generate localization classes with slang.
+      run: dart run slang
+    codegen:vectors:
+      description: Compile SVG icons into vector graphics (.vec).
+      run: dart run vector_graphics_compiler --input-dir assets/icon/pane --out-dir assets/icon/pane
+    codegen:build_runner:
+      description: Run build_runner code generation.
+      run: dart run build_runner build
+    codegen:watch:
+      description: Watch build_runner code generation.
+      run: dart run build_runner watch
+    codegen:
+      description: Run full code generation pipeline (slang, vectors, build_runner).
+      run: dart run slang && dart run vector_graphics_compiler --input-dir assets/icon/pane --out-dir assets/icon/pane && dart run build_runner build
+
+    build:cli:
+      description: Build revitool CLI with native bridge DLL and elevation manifest.
+      run: dart run tool/build_cli.dart
+    build:cli:dev:
+      description: Build dev revitool CLI without requiring UAC elevation.
+      run: dart run tool/build_cli.dart --no-manifest -o build/cli/revitool_dev.exe
+    build:gui:
+      description: Build the Windows GUI application.
+      run: flutter build windows --split-debug-info=/symbols
+    build:gui:release:
+      description: Build the release Windows GUI with obfuscation.
+      run: flutter build windows --obfuscate --split-debug-info=/symbols
+    
+    bundle:winsxs:
+      description: Download bundled WinSxS packages from GitHub releases.
+      run: dart run tool/bundle_winsxs.dart
+    bundle:appx:
+      description: Download bundled VCLibs AppX packages via revitool CLI.
+      run: dart run tool/bundle_appx.dart
+    build:installer:
+      description: Compile Inno Setup installer.
+      run: iscc ../inno-setup.iss
+    check:
+      description: Run static analysis and tests across all packages.
+      run: melos run analyze && melos run test
+
+    compile:c:
+      description: Compile C process checker helper.
+      run: gcc -shared -o ../native_utils/process_checker.dll ../native_utils/process_checker.c -lpsapi -O3
+    frb:
+      description: Regenerate the Rust bridge and its Dart bindings.
+      exec:
+        command: flutter_rust_bridge_codegen generate
+      packageFilters:
+        scope: revitool_native
+    rust:
+      description: Lint, test, and build the native Rust crate.
+      exec:
+        command: cd rust && cargo clippy --all-targets --all-features --locked -- -D warnings && cargo test && cargo build --release
+      packageFilters:
+        dirExists: rust
+  
+
+# dependency_overrides:
+#   petitparser: ^7.0.2
+#   math_expressions: ^3.1.0
+  
+flutter:
+  uses-material-design: false
+
+  assets:
+    - assets/
+    - assets/icon/
+    - assets/icon/pane/
+    - additionals/
+    - additionals/packages/winsxs/
+    - additionals/packages/appx/

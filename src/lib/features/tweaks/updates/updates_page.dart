@@ -1,0 +1,160 @@
+import 'dart:async';
+
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart' as msicons;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/widgets/card_highlight.dart';
+import '../../../core/widgets/loading_dialog.dart';
+import '../../../core/widgets/subtitle.dart';
+import '../../../extensions.dart';
+import '../../../i18n/generated/strings.g.dart';
+import '../../../utils_gui.dart';
+import 'updates_service.dart';
+
+class const UpdatesPage({super.key}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ScaffoldPage.scrollable(
+      padding: kScaffoldPagePadding,
+
+      children: [
+        const _CertificatesCard(),
+        const _UpdateKGLCard(),
+        Subtitle(content: Text(t.subtitleWindowsUpdates)),
+        const _PauseUpdatesCard(),
+        const _VisibilityCard(),
+        const _DriversCard(),
+      ].withSpacing(5),
+    );
+  }
+}
+
+class const _CertificatesCard() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return CardHighlight(
+      icon: msicons.FluentIcons.certificate_20_regular,
+      label: t.tweaksSecurityCerts,
+      description: t.tweaksSecurityCertsDescription,
+      action: SizedBox(
+        width: 150,
+        child: Button(
+          onPressed: () async {
+            unawaited(showLoadingDialog(context, 'Updating Certificates'));
+            await ref.read(updatesServiceProvider).updateCertificates();
+
+            if (!context.mounted) return;
+            context.pop();
+            await showDialog(
+              context: context,
+              builder: (context) => ContentDialog(
+                content: Text(t.tweaksSecurityCertsUpdateDialog),
+                actions: [Button(child: Text(t.okButton), onPressed: () => context.pop())],
+              ),
+            );
+          },
+          child: Text(t.updateButton),
+        ),
+      ),
+    );
+  }
+}
+
+class const _UpdateKGLCard() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return CardHighlight(
+      icon: msicons.FluentIcons.xbox_controller_20_regular,
+      label: t.tweaksUtilitiesUpdateKGL,
+      description: t.tweaksUtilitiesUpdateKGLDescription,
+      action: SizedBox(
+        width: 150,
+        child: Button(
+          onPressed: () async {
+            var message = '';
+            try {
+              unawaited(showLoadingDialog(context, '${t.settingsUpdatingStatus} KGL'));
+              await ref.read(updatesServiceProvider).updateKGL();
+              if (!context.mounted) return;
+              message = t.restartDialog;
+            } catch (e) {
+              message = e.toString();
+            } finally {
+              context.pop();
+              showRestartDialog(context, title: t.settingsUpdatingStatusSuccess, content: message);
+            }
+          },
+          child: Text(t.updateButton),
+        ),
+      ),
+    );
+  }
+}
+
+class const _PauseUpdatesCard() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool status = ref.watch(pauseUpdatesWUStatusProvider);
+
+    return CardHighlight(
+      icon: msicons.FluentIcons.pause_20_regular,
+      label: t.tweaksUpdatesWUPause,
+      description: t.tweaksUpdatesWUPauseDescription,
+      action: CardToggleSwitch(
+        value: status,
+        onChanged: (value) async {
+          value
+              ? await ref.read(updatesServiceProvider).enablePauseUpdatesWU()
+              : await ref.read(updatesServiceProvider).disablePauseUpdatesWU();
+          ref.invalidate(pauseUpdatesWUStatusProvider);
+        },
+      ),
+    );
+  }
+}
+
+class const _VisibilityCard() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool status = ref.watch(visibilityWUStatusProvider);
+
+    return CardHighlight(
+      icon: msicons.FluentIcons.arrow_sync_20_regular,
+      label: t.tweaksUpdatesWUPage,
+      description: t.tweaksUpdatesWUPageDescription,
+      action: CardToggleSwitch(
+        value: status,
+        onChanged: (value) async {
+          value
+              ? await ref.read(updatesServiceProvider).disableVisibilityWU()
+              : await ref.read(updatesServiceProvider).enableVisibilityWU();
+          ref.invalidate(visibilityWUStatusProvider);
+        },
+      ),
+    );
+  }
+}
+
+class const _DriversCard() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool status = ref.watch(driversWUStatusProvider);
+
+    return CardHighlight(
+      icon: FluentIcons.devices4,
+      label: t.tweaksUpdatesWUDrivers,
+      description: t.tweaksUpdatesWUDriversDescription,
+      action: CardToggleSwitch(
+        value: status,
+        onChanged: (value) async {
+          value
+              ? await ref.read(updatesServiceProvider).enableDriversWU()
+              : await ref.read(updatesServiceProvider).disableDriversWU();
+          ref.invalidate(driversWUStatusProvider);
+        },
+      ),
+    );
+  }
+}

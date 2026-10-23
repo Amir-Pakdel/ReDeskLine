@@ -1,0 +1,76 @@
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart' as msicons;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/routing/app_routes.dart';
+import '../../../core/widgets/card_highlight.dart';
+import '../../../extensions.dart';
+import '../../../i18n/generated/strings.g.dart';
+import '../../../utils_gui.dart';
+import 'personalization_service.dart';
+import 'sections/desktop_section.dart';
+
+class const PersonalizationPage({super.key}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ScaffoldPage.scrollable(
+      padding: kScaffoldPagePadding,
+      children: [
+        CardHighlight(
+          icon: msicons.FluentIcons.desktop_20_regular,
+          label: t.pageDesktop,
+          description: t.pageDesktopDescription,
+          action: const ChevronRightAction(),
+          onPressed: () => context.push(RouteMeta.desktop.path),
+        ),
+        const DesktopSection(),
+        const _InputPersonalizationCard(),
+        const _CapsLockCard(),
+      ].withSpacing(5),
+    );
+  }
+}
+
+class const _InputPersonalizationCard() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool status = ref.watch(inputPersonalizationStatusProvider);
+
+    return CardHighlight(
+      icon: msicons.FluentIcons.keyboard_20_regular,
+      label: t.tweaksPersonalizationInkingAndTypingPersonalization,
+      description: t.tweaksPersonalizationInkingAndTypingPersonalizationDescription,
+      action: CardToggleSwitch(
+        value: status,
+        onChanged: (value) async {
+          value
+              ? await ref.read(personalizationServiceProvider).enableInputPersonalization()
+              : await ref.read(personalizationServiceProvider).disableInputPersonalization();
+          ref.invalidate(inputPersonalizationStatusProvider);
+        },
+      ),
+    );
+  }
+}
+
+class const _CapsLockCard() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool status = ref.watch(capsLockStatusProvider);
+
+    return CardHighlight(
+      icon: WindowsIcons.keyboard_left_dock,
+      label: t.tweaksPersonalizationCapsLock,
+      action: CardToggleSwitch(
+        value: status,
+        onChanged: (value) async {
+          value
+              ? await ref.read(personalizationServiceProvider).disableCapsLock()
+              : await ref.read(personalizationServiceProvider).enableCapsLock();
+          ref.invalidate(capsLockStatusProvider);
+        },
+      ),
+    );
+  }
+}
